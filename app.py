@@ -34,13 +34,15 @@ if cli_sel != "Todos":
 if prod_sel != "Todos":
     df = df[df["CODIGO PRODUCTO"] == prod_sel]
 
-# Calcular Costo Unitario por producto
+# Preparar insumos con precio 0 si falta
 recetas = recetas.merge(insumos, on="CODIGO INSUMO", how="left")
+recetas["PRECIO"] = recetas["PRECIO"].fillna(0)
 recetas["COSTO_UNITARIO"] = recetas["CANTIDAD"] * recetas["PRECIO"]
 costos_prod = recetas.groupby("CODIGO PRODUCTO")["COSTO_UNITARIO"].sum().reset_index()
 
 # Unir con ventas
 df = df.merge(costos_prod, on="CODIGO PRODUCTO", how="left")
+df["COSTO_UNITARIO"] = df["COSTO_UNITARIO"].fillna(0)
 df["INGRESO TOTAL"] = df["CANTIDAD"] * df["PRECIO UNITARIO"]
 df["COSTO TOTAL"] = df["CANTIDAD"] * df["COSTO_UNITARIO"]
 df["MARGEN"] = df["INGRESO TOTAL"] - df["COSTO TOTAL"]
