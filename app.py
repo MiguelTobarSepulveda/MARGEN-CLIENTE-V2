@@ -2,39 +2,34 @@
 import streamlit as st
 import pandas as pd
 
-# Cargar datos
 @st.cache_data
 def load_data():
-    ventas = pd.read_excel("Base_Margenes.xlsx", sheet_name="LIBRO DE VENTAS")
-    recetas = pd.read_excel("Base_Margenes.xlsx", sheet_name="RECETAS DE PRODUCTOS")
-    insumos = pd.read_excel("Base_Margenes.xlsx", sheet_name="PRECIO DE INSUMOS")
-    return ventas, recetas, insumos
+    ventas = pd.read_excel("Base_Margenes_v3.xlsx", sheet_name="LIBRO DE VENTAS")
+    recetas = pd.read_excel("Base_Margenes_v3.xlsx", sheet_name="RECETAS DE PRODUCTOS")
+    insumos_hist = pd.read_excel("Base_Margenes_v3.xlsx", sheet_name="PRECIO DE INSUMOS")
+    return ventas, recetas, insumos_hist
 
-ventas, recetas, insumos = load_data()
+ventas, recetas, insumos_hist = load_data()
 
-# Título
+ventas["MES"] = pd.to_datetime(ventas["FECHA"]).dt.to_period("M").astype(str)
+insumos_hist["MES"] = insumos_hist["FECHA"].astype(str)
+
 st.title("Consulta de Márgenes por Cliente y Producto")
 
-# Filtros
-ventas["MES"] = pd.to_datetime(ventas["FECHA"]).dt.to_period("M").astype(str)
-meses = sorted(ventas["MES"].unique())
 clientes = sorted(ventas["CLIENTE"].unique())
-
-# Mostrar código + nombre del producto
 ventas["PRODUCTO COMPLETO"] = ventas["CODIGO PRODUCTO"] + " - " + ventas["NOMBRE DE PRODUCTO"]
 productos = sorted(ventas["PRODUCTO COMPLETO"].unique())
+meses = sorted(ventas["MES"].unique())
 
 mes_sel = st.selectbox("Selecciona el mes", ["Todos"] + meses)
 cli_sel = st.selectbox("Selecciona el cliente", ["Todos"] + clientes)
 prod_sel = st.selectbox("Selecciona el producto", ["Todos"] + productos)
 
-# Extraer código producto desde el combinado si se selecciona uno
 if prod_sel != "Todos":
     prod_sel_codigo = prod_sel.split(" - ")[0]
 else:
     prod_sel_codigo = "Todos"
 
-# Aplicar filtros
 df = ventas.copy()
 if mes_sel != "Todos":
     df = df[df["MES"] == mes_sel]
@@ -43,14 +38,24 @@ if cli_sel != "Todos":
 if prod_sel_codigo != "Todos":
     df = df[df["CODIGO PRODUCTO"] == prod_sel_codigo]
 
-# Preparar insumos con precio 0 si falta, insumo faltante = 0
-recetas = recetas.merge(insumos, on="CODIGO INSUMO", how="left")
-recetas["PRECIO"] = recetas["PRECIO"].fillna(0)
-recetas["COSTO_UNITARIO"] = recetas["CANTIDAD"] * recetas["PRECIO"]
-costos_prod = recetas.groupby("CODIGO PRODUCTO")["COSTO_UNITARIO"].sum().reset_index()
+# Expandir recetas por mes y unir con histórico de precios
+meses_validos = df["MES"].unique()
+recetas_exp = pd.DataFrame()
+for mes in meses_validos:
+    temp = recetas.copy()
+    temp["MES"] = mes
+    recetas_exp = pd.concat([recetas_exp, temp])
 
-# Unir con ventas
-df = df.merge(costos_prod, on="CODIGO PRODUCTO", how="left")
+# Obtener último precio disponible hacia atrás
+insumos_hist_sorted = insumos_hist.sort_values(["CODIGO INSUMO", "MES"])
+insumos_hist_filled = insumos_hist_sorted.groupby("CODIGO INSUMO").ffill()
+recetas_exp = recetas_exp.merge(insumos_hist_filled, on=["CODIGO INSUMO", "MES"], how="left")
+recetas_exp["PRECIO"] = recetas_exp["PRECIO"].fillna(0)
+recetas_exp["COSTO_UNITARIO"] = recetas_exp["CANTIDAD"] * recetas_exp["PRECIO"]
+
+costos_mensuales = recetas_exp.groupby(["CODIGO PRODUCTO", "MES"])["COSTO_UNITARIO"].sum().reset_index()
+
+df = df.merge(costos_mensuales, on=["CODIGO PRODUCTO", "MES"], how="left")
 df["COSTO_UNITARIO"] = df["COSTO_UNITARIO"].fillna(0)
 df["INGRESO TOTAL"] = df["CANTIDAD"] * df["PRECIO UNITARIO"]
 df["COSTO TOTAL"] = df["CANTIDAD"] * df["COSTO_UNITARIO"]
@@ -68,6 +73,6 @@ col3.metric("Margen Promedio", f"{(df['MARGEN %'].mean()*100):.1f} %")
 # Mostrar tabla
 st.subheader("Detalle por Factura")
 st.dataframe(df[[
-    "NÚMERO", "FECHA", "CLIENTE", "NOMBRE DE PRODUCTO", "CANTIDAD",
+    "NÚMERO", "FECHA", "CLIENTE", "NOMBRE DE PRODUCTO", "MES", "CANTIDAD",
     "PRECIO UNITARIO", "INGRESO TOTAL", "COSTO TOTAL", "MARGEN $", "MARGEN %"
 ]])
