@@ -20,8 +20,8 @@ ventas["MES"] = pd.to_datetime(ventas["FECHA"]).dt.to_period("M").astype(str)
 meses = sorted(ventas["MES"].unique())
 clientes = sorted(ventas["CLIENTE"].unique())
 
-# Unir código y descripción para mostrar en el filtro de producto
-ventas["PRODUCTO COMPLETO"] = ventas["CODIGO PRODUCTO"] + " - " + ventas["PRODUCTO"]
+# Mostrar código + nombre del producto
+ventas["PRODUCTO COMPLETO"] = ventas["CODIGO PRODUCTO"] + " - " + ventas["NOMBRE DE PRODUCTO"]
 productos = sorted(ventas["PRODUCTO COMPLETO"].unique())
 
 mes_sel = st.selectbox("Selecciona el mes", ["Todos"] + meses)
@@ -68,6 +68,6 @@ col3.metric("Margen Promedio", f"{(df['MARGEN %'].mean()*100):.1f} %")
 # Mostrar tabla
 st.subheader("Detalle por Factura")
 st.dataframe(df[[
-    "NÚMERO", "FECHA", "CLIENTE", "PRODUCTO", "CANTIDAD",
+    "NÚMERO", "FECHA", "CLIENTE", "NOMBRE DE PRODUCTO", "CANTIDAD",
     "PRECIO UNITARIO", "INGRESO TOTAL", "COSTO TOTAL", "MARGEN $", "MARGEN %"
 ]])
